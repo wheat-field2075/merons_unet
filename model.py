@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[2]:
 
 
 import os
@@ -18,13 +18,22 @@ from tensorboardX import SummaryWriter
 from sklearn.model_selection import train_test_split
 from augmentor import Augmentor
 from image_loader import ImageLoader, PatchGenerator
+import yaml
 
 
-# In[2]:
+# In[28]:
 
 
-img_size = 160
-print("img_size={}".format(img_size))
+data = yaml.load(open('./settings.yaml', 'r'), yaml.Loader)
+
+images_path = data['images_path']
+masks_path = data['masks_path']
+image_patches_path = data['image_patches_path']
+mask_patches_path = data['mask_patches_path']
+
+patch_size = data['patch_size']
+sigma = data['sigma']
+num_neg_samples = data['num_neg_samples']
 
 transform = T.Compose([
     T.ToTensor(),
@@ -32,13 +41,16 @@ transform = T.Compose([
     T.RandomVerticalFlip(0.5),
 ])
 
-train_imgloader = ImageLoader('./dataset/images', './dataset/augmented_masks', Augmentor(), img_size)
-train_imgloader, val_imgloader = train_imgloader.split([train_imgloader.images[0]])
-train_patches = np.array(list(PatchGenerator(train_imgloader)))
-val_patches = np.array(list(PatchGenerator(val_imgloader)))
+train_set = []
+val_set = []
+
+for i in [10, 20, 30, 40]:
+    train_set.append("Bubbles_movie_01_x1987x2020x81_3cv2_NLM_template20_search62_inverted{}.png".format(i))
+for i in [50]:
+    val_set.append("Bubbles_movie_01_x1987x2020x81_3cv2_NLM_template20_search62_inverted{}.png".format(i))
 
 
-# In[3]:
+# In[29]:
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -59,7 +71,7 @@ class Dataset(torch.utils.data.Dataset):
         return tuple([im, mask])
 
 
-# In[4]:
+# In[30]:
 
 
 class DoubleConv(nn.Module):
@@ -142,11 +154,26 @@ class UNet(nn.Module):
         return torch.sigmoid(logits)
 
 
-# In[5]:
+# In[37]:
 
 
-train_ds = Dataset(train_patches[:, 0], train_patches[:, 1])
-val_ds = Dataset(train_patches[:, 0], train_patches[:, 1])
+train_ds = []
+val_ds = []
+
+for image_set, ds in [[train_set, train_ds], [val_set, val_ds]]:
+    for image in image_set:
+        print("Image:", image)
+        patch_names = [file for file in os.listdir(os.path.join(image_patches_path, image)) if file[-4:] == '.npy']
+        for patch in tqdm(range(len(patch_names))):
+            image_patch = np.load(os.path.join(image_patches_path, image, patch_names[patch]))
+            mask_patch = np.load(os.path.join(mask_patches_path, image, patch_names[patch]))
+            ds.append(np.array([image_patch, mask_patch]))
+            
+train_ds = np.array(train_ds)
+val_ds = np.array(val_ds)
+
+train_ds = Dataset(train_ds[:, 0], train_ds[:, 1])
+val_ds = Dataset(val_ds[:, 0], val_ds[:, 1])
 
 train_loader = torch.utils.data.DataLoader(train_ds, shuffle=True, batch_size=10)
 val_loader = torch.utils.data.DataLoader(val_ds, shuffle=False, batch_size=10)
@@ -161,10 +188,10 @@ lossFunc = nn.MSELoss()
 opt = torch.optim.SGD(unet.parameters(), lr=lr)
 scheduler = optim.lr_scheduler.CosineAnnealingLR(opt, T_max=100, eta_min=0)
 
-writer = SummaryWriter('./post_csrnet/runs/size={}, no_transforms, sigma=3'.format(img_size))
+writer = SummaryWriter('./2023.05.14 with_neg/runs/model_psize={:03}, neg_sample=300, no_transform'.format(patch_size))
 
 
-# In[6]:
+# In[ ]:
 
 
 for epoch in tqdm(range(epochs)):
@@ -204,11 +231,14 @@ for epoch in tqdm(range(epochs)):
     writer.add_scalar('val_loss', avg_val_loss, epoch)
     
     if (epoch + 1) % 100 == 0:
-        model_param_path = './post_csrnet/model_saves/model_psize={:03}, no_transform, sigma=3,{:04}.pth'.format(img_size, epoch + 1)
+        model_param_path = './2023.05.14 with_neg/model_saves/model_psize={:03}, neg_samples=300, no_transform, epoch={:04}.pth'.format(patch_size, epoch + 1)
         torch.save(unet.state_dict(), model_param_path)
 
 writer.flush()
 writer.close()
+
+
+# In[ ]:
 
 
 

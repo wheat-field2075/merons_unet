@@ -1,0 +1,9 @@
+dataset_path: ./dataset
+images_path: ./dataset/images
+masks_path: ./dataset/masks
+image_patches_path: ./dataset/image_patches
+mask_patches_path: ./dataset/mask_patches
+
+patch_size: 200
+sigma: 9
+num_neg_samples: 750
