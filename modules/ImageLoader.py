@@ -51,37 +51,3 @@ class ImageLoader():
     
     def __len__(self):
         return len(self.patches)
-    
-class PatchGenerator():
-    def __init__(self, imgload):
-        self.imgload = imgload
-        self.image = None
-        self.counter = 0
-    def __iter__(self):
-        return self
-    def __next__(self):
-        try:
-            patch = self.imgload.patches[self.counter]
-            if self.image == None or self.image['fname'] != patch['fname']:
-                self.image = dict(fname=patch['fname'], image=plt.imread(os.path.join(self.imgload.img_path, patch['fname'])))
-                self.mask = dict(fname=patch['fname'], mask=np.load(os.path.join(self.imgload.mask_path, patch['fname'] + '.npy')))
-            self.counter += 1
-            full_size = self.imgload.image_size 
-            half_size = full_size // 2
-            
-            y = max(0, patch['y'] - half_size)
-            x = max(0, patch['x'] - half_size)
-            y = min(self.image['image'].shape[0] - full_size, y)
-            x = min(self.image['image'].shape[1] - full_size, x)
-            
-            img_patch = self.image['image'][y:y+full_size, x:x+full_size]
-            mask_patch = self.mask['mask'][y:y+full_size, x:x+full_size]
-            
-            if self.imgload.augs is not None:  
-                img_patch, mask_patch = self.imgload.augs.augment([img_patch, mask_patch])
-
-            return img_patch, mask_patch
-            
-        except IndexError:
-            raise StopIteration
-

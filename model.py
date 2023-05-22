@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[2]:
+# In[1]:
 
 
 import os
@@ -16,12 +16,12 @@ from PIL import Image
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
 from sklearn.model_selection import train_test_split
-from augmentor import Augmentor
+import albumentations as A
 from image_loader import ImageLoader, PatchGenerator
 import yaml
 
 
-# In[28]:
+# In[2]:
 
 
 data = yaml.load(open('./settings.yaml', 'r'), yaml.Loader)
@@ -35,10 +35,11 @@ patch_size = data['patch_size']
 sigma = data['sigma']
 num_neg_samples = data['num_neg_samples']
 
-transform = T.Compose([
-    T.ToTensor(),
-    T.RandomHorizontalFlip(0.5),
-    T.RandomVerticalFlip(0.5),
+transform = A.Compose([
+    A.RandomRotate90(p=1),
+    A.Transpose(p=0.5),
+    A.HorizontalFlip(p=0.5),
+    A.VerticalFlip(p=0.5),
 ])
 
 train_set = []
@@ -50,7 +51,7 @@ for i in [50]:
     val_set.append("Bubbles_movie_01_x1987x2020x81_3cv2_NLM_template20_search62_inverted{}.png".format(i))
 
 
-# In[29]:
+# In[3]:
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -71,7 +72,7 @@ class Dataset(torch.utils.data.Dataset):
         return tuple([im, mask])
 
 
-# In[30]:
+# In[4]:
 
 
 class DoubleConv(nn.Module):
@@ -154,7 +155,7 @@ class UNet(nn.Module):
         return torch.sigmoid(logits)
 
 
-# In[37]:
+# In[5]:
 
 
 train_ds = []
@@ -188,10 +189,10 @@ lossFunc = nn.MSELoss()
 opt = torch.optim.SGD(unet.parameters(), lr=lr)
 scheduler = optim.lr_scheduler.CosineAnnealingLR(opt, T_max=100, eta_min=0)
 
-writer = SummaryWriter('./2023.05.14 with_neg/runs/model_psize={:03}, neg_sample=300, no_transform'.format(patch_size))
+writer = SummaryWriter('./2023.05.14 with_neg/runs/model_psize={:03}, dihedral_4'.format(patch_size))
 
 
-# In[ ]:
+# In[30]:
 
 
 for epoch in tqdm(range(epochs)):
@@ -200,6 +201,14 @@ for epoch in tqdm(range(epochs)):
     total_val_loss = 0
 
     for x, y in train_loader:
+        x, y = np.moveaxis(np.array(x), 1, -1), np.moveaxis(np.array(y), 1, -1)
+        for batch_id in range(x.shape[0]):
+            transformed = transform(image=x[batch_id], mask=y[batch_id])            
+            x[batch_id] = transformed['image']
+            y[batch_id] = transformed['mask']
+        x, y = np.moveaxis(x, -1, 1), np.moveaxis(y, -1, 1)
+        x, y = torch.Tensor(x), torch.Tensor(y)
+
         x = x.to(device, dtype=torch.float)
         y = y.to(device, dtype=torch.float)
         
@@ -216,6 +225,14 @@ for epoch in tqdm(range(epochs)):
         unet.eval()
 
         for x, y in val_loader:
+            x, y = np.moveaxis(np.array(x), 1, -1), np.moveaxis(np.array(y), 1, -1)
+            for batch_id in range(x.shape[0]):
+                transformed = transform(image=x[batch_id], mask=y[batch_id])            
+                x[batch_id] = transformed['image']
+                y[batch_id] = transformed['mask']
+            x, y = np.moveaxis(x, -1, 1), np.moveaxis(y, -1, 1)
+            x, y = torch.Tensor(x), torch.Tensor(y)
+            
             x = x.to(device, dtype=torch.float)
             y = y.to(device, dtype=torch.float)
             
@@ -231,7 +248,7 @@ for epoch in tqdm(range(epochs)):
     writer.add_scalar('val_loss', avg_val_loss, epoch)
     
     if (epoch + 1) % 100 == 0:
-        model_param_path = './2023.05.14 with_neg/model_saves/model_psize={:03}, neg_samples=300, no_transform, epoch={:04}.pth'.format(patch_size, epoch + 1)
+        model_param_path = './2023.05.14 with_neg/model_saves/model_psize={:03}, dihedral_4, epoch={:04}.pth'.format(patch_size, epoch + 1)
         torch.save(unet.state_dict(), model_param_path)
 
 writer.flush()
