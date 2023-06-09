@@ -13,7 +13,7 @@ class Dataset(torch.utils.data.Dataset):
         mask = self.masks[index]
         
         # format to H, W, C
-        im = im.reshape([im.shape[0], im.shape[1], 1])
-        mask = mask.reshape([mask.shape[0], mask.shape[1], 1])
+#         im = im.reshape([im.shape[1], im.shape[2], 3])
+#         mask = mask.reshape([mask.shape[0], mask.shape[1], 1])
                                     
         return tuple([im, mask])
