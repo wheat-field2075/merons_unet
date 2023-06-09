@@ -1,3 +1,8 @@
+### 2023/06/09: focal loss
+- tried out elastic transforms, grid distortions, optical distortions, Gaussian noise on UNet method, didn't help perf.
+- tried using focal loss w/ pre-trained ResNet and VGGNet
+- currently using UNet w/ focal loss, needs debugging
+
 ### 2023/05/22: dihedral4
 - added augmentations for dihedral-4
 - loss on val-data is noticably lower, but fails to yield noticable improvments on the entire patch
